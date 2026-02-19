@@ -1,0 +1,266 @@
+1️⃣ Top 2 users per product by purchases (include ties)
+SELECT product_id, user_id, cnt
+FROM (
+  SELECT
+    product_id,
+    user_id,
+    COUNT(*) AS cnt,
+    DENSE_RANK() OVER (
+      PARTITION BY product_id
+      ORDER BY COUNT(*) DESC
+    ) AS rnk
+  FROM purchases
+  GROUP BY product_id, user_id
+) t
+WHERE rnk <= 2;
+
+2️⃣ Sessions + avg session duration (30-min inactivity)
+WITH t AS (
+  SELECT
+    user_id,
+    event_time,
+    CASE
+      WHEN LAG(event_time) OVER (PARTITION BY user_id ORDER BY event_time) IS NULL
+        OR event_time - LAG(event_time) OVER (PARTITION BY user_id ORDER BY event_time)
+           > INTERVAL '30 minutes'
+      THEN 1 ELSE 0
+    END AS new_session
+  FROM events
+),
+sessions AS (
+  SELECT
+    user_id,
+    event_time,
+    SUM(new_session) OVER (PARTITION BY user_id ORDER BY event_time) AS session_id
+  FROM t
+)
+SELECT
+  user_id,
+  COUNT(DISTINCT session_id) AS sessions,
+  AVG(MAX(event_time) - MIN(event_time)) AS avg_session_duration
+FROM sessions
+GROUP BY user_id;
+
+3️⃣ Funnel conversion (ordered)
+WITH ranked AS (
+  SELECT
+    user_id,
+    event,
+    event_time,
+    ROW_NUMBER() OVER (PARTITION BY user_id, event ORDER BY event_time) rn
+  FROM events
+)
+SELECT
+  COUNT(DISTINCT v.user_id) AS views,
+  COUNT(DISTINCT a.user_id) AS carts,
+  COUNT(DISTINCT p.user_id) AS purchases
+FROM ranked v
+LEFT JOIN ranked a
+  ON v.user_id = a.user_id
+ AND a.event = 'add_to_cart'
+ AND a.event_time > v.event_time
+LEFT JOIN ranked p
+  ON a.user_id = p.user_id
+ AND p.event = 'purchase'
+ AND p.event_time > a.event_time
+WHERE v.event = 'view';
+
+4️⃣ Day-7 retention (Jan 2025)
+WITH signup AS (
+  SELECT user_id, MIN(event_date) AS signup_date
+  FROM events
+  GROUP BY user_id
+)
+SELECT
+  COUNT(DISTINCT r.user_id) * 1.0 / COUNT(DISTINCT s.user_id) AS day7_retention
+FROM signup s
+LEFT JOIN events r
+  ON s.user_id = r.user_id
+ AND r.event_date = s.signup_date + INTERVAL '7 day'
+WHERE s.signup_date BETWEEN '2025-01-01' AND '2025-01-31';
+
+5️⃣ 7-day rolling DAU average
+SELECT
+  date,
+  AVG(dau) OVER (
+    ORDER BY date
+    ROWS BETWEEN 6 PRECEDING AND CURRENT ROW
+  ) AS rolling_7d_avg
+FROM (
+  SELECT date, COUNT(DISTINCT user_id) AS dau
+  FROM activity
+  GROUP BY date
+) t;
+
+6️⃣ Repeat purchasers but never consecutive days
+WITH t AS (
+  SELECT
+    user_id,
+    purchase_date,
+    LAG(purchase_date) OVER (PARTITION BY user_id ORDER BY purchase_date) prev_date
+  FROM purchases
+)
+SELECT user_id
+FROM t
+GROUP BY user_id
+HAVING COUNT(*) > 1
+AND MAX(CASE WHEN purchase_date = prev_date + INTERVAL '1 day' THEN 1 ELSE 0 END) = 0;
+
+7️⃣ ARPU per variant (exclude zero exposure)
+SELECT
+  variant,
+  SUM(revenue) * 1.0 / COUNT(DISTINCT user_id) AS arpu
+FROM experiment
+WHERE exposed = 1
+GROUP BY variant;
+
+8️⃣ Viewed but never purchased afterward
+SELECT DISTINCT v.user_id, v.product_id
+FROM events v
+WHERE v.event = 'view'
+AND NOT EXISTS (
+  SELECT 1
+  FROM events p
+  WHERE p.user_id = v.user_id
+    AND p.product_id = v.product_id
+    AND p.event = 'purchase'
+    AND p.event_time > v.event_time
+);
+
+9️⃣ Keep most recent record per user
+SELECT *
+FROM (
+  SELECT *,
+         ROW_NUMBER() OVER (
+           PARTITION BY user_id
+           ORDER BY updated_at DESC
+         ) rn
+  FROM users
+) t
+WHERE rn = 1;
+
+🔟 Median session duration per platform
+SELECT
+  platform,
+  PERCENTILE_CONT(0.5)
+    WITHIN GROUP (ORDER BY session_duration) AS median_duration
+FROM sessions
+GROUP BY platform;
+
+1️⃣1️⃣ First purchase > avg subsequent purchases
+WITH ranked AS (
+  SELECT
+    user_id,
+    amount,
+    ROW_NUMBER() OVER (PARTITION BY user_id ORDER BY purchase_time) rn
+  FROM purchases
+)
+SELECT user_id
+FROM ranked
+GROUP BY user_id
+HAVING
+  MAX(CASE WHEN rn = 1 THEN amount END)
+  >
+  AVG(CASE WHEN rn > 1 THEN amount END);
+
+1️⃣2️⃣ Longest consecutive activity streak
+WITH t AS (
+  SELECT
+    user_id,
+    activity_date,
+    activity_date -
+      ROW_NUMBER() OVER (PARTITION BY user_id ORDER BY activity_date) AS grp
+  FROM activity
+)
+SELECT
+  user_id,
+  MAX(COUNT(*)) AS longest_streak
+FROM t
+GROUP BY user_id, grp;
+
+1️⃣3️⃣ Products with above-average conversion
+WITH conv AS (
+  SELECT
+    product_id,
+    SUM(CASE WHEN event = 'purchase' THEN 1 ELSE 0 END) * 1.0
+    / SUM(CASE WHEN event = 'view' THEN 1 ELSE 0 END) AS conversion
+  FROM events
+  GROUP BY product_id
+)
+SELECT *
+FROM conv
+WHERE conversion > (SELECT AVG(conversion) FROM conv);
+
+1️⃣4️⃣ Churned then reactivated within 30 days
+SELECT user_id
+FROM subscriptions
+WHERE status = 'reactivated'
+AND reactivated_date <= churn_date + INTERVAL '30 day';
+
+1️⃣5️⃣ Same action 3 times in a row
+SELECT DISTINCT user_id
+FROM (
+  SELECT
+    user_id,
+    event,
+    LAG(event,1) OVER w AS e1,
+    LAG(event,2) OVER w AS e2
+  FROM events
+  WINDOW w AS (PARTITION BY user_id ORDER BY event_time)
+) t
+WHERE event = e1 AND e1 = e2;
+
+1️⃣6️⃣ Purchased every month in 2024
+SELECT user_id
+FROM purchases
+WHERE purchase_date BETWEEN '2024-01-01' AND '2024-12-31'
+GROUP BY user_id
+HAVING COUNT(DISTINCT DATE_TRUNC('month', purchase_date)) = 12;
+
+1️⃣7️⃣ Week-over-week DAU growth
+WITH weekly AS (
+  SELECT
+    DATE_TRUNC('week', date) week,
+    COUNT(DISTINCT user_id) dau
+  FROM activity
+  GROUP BY week
+)
+SELECT
+  week,
+  (dau - LAG(dau) OVER (ORDER BY week)) * 1.0
+   / LAG(dau) OVER (ORDER BY week) AS wow_growth
+FROM weekly;
+
+1️⃣8️⃣ Top search query per day
+SELECT date, query
+FROM (
+  SELECT
+    date,
+    query,
+    COUNT(*) cnt,
+    RANK() OVER (PARTITION BY date ORDER BY COUNT(*) DESC) rnk
+  FROM searches
+  GROUP BY date, query
+) t
+WHERE rnk = 1;
+
+1️⃣9️⃣ Funnel drop-off per step
+SELECT
+  step,
+  COUNT(DISTINCT user_id) AS users
+FROM funnel_events
+GROUP BY step;
+
+
+(Interview follow-up: compare step-to-step deltas)
+
+2️⃣0️⃣ Cumulative lifetime revenue per user
+SELECT
+  user_id,
+  event_time,
+  SUM(revenue) OVER (
+    PARTITION BY user_id
+    ORDER BY event_time
+    ROWS BETWEEN UNBOUNDED PRECEDING AND CURRENT ROW
+  ) AS cumulative_revenue
+FROM revenue_events;

@@ -1,0 +1,314 @@
+Advanced SQL Questions — Full Context + Table Columns
+1️⃣ Top users per product
+
+Business context:
+You work on Google Shopping. The team wants to identify power buyers for each product.
+
+Table: purchases
+
+purchase_id      -- unique transaction id
+user_id
+product_id
+purchase_time    -- timestamp
+
+
+Question:
+For each product, find the top 2 users by total number of purchases.
+If there are ties, include all tied users.
+
+2️⃣ User sessions
+
+Business context:
+You are analyzing engagement on Google Search.
+
+Table: events
+
+event_id
+user_id
+event_type       -- click, search, scroll, etc.
+event_time       -- timestamp
+
+
+Question:
+Define a session as 30 minutes of inactivity.
+For each user:
+
+Number of sessions
+
+Average session duration
+
+3️⃣ Funnel conversion
+
+Business context:
+You’re analyzing an e-commerce funnel.
+
+Table: events
+
+user_id
+product_id
+event             -- 'view', 'add_to_cart', 'purchase'
+event_time
+
+
+Question:
+Calculate how many users complete each funnel step
+view → add_to_cart → purchase in order, and compute conversion rates.
+
+4️⃣ Day-7 retention
+
+Business context:
+A feature launched in January 2025 and you want to measure retention.
+
+Table: events
+
+user_id
+event_type        -- 'signup', 'login', etc.
+event_date        -- DATE (not timestamp)
+
+
+Question:
+Among users who signed up in January 2025, calculate Day-7 retention
+(users active exactly 7 days after signup).
+
+5️⃣ Rolling DAU
+
+Business context:
+Leadership wants a smoother DAU trend.
+
+Table: daily_activity
+
+activity_date     -- DATE
+user_id
+
+
+Question:
+Calculate a 7-day rolling average of Daily Active Users.
+
+6️⃣ Repeat buyers (non-consecutive)
+
+Business context:
+Marketing wants consistent buyers, not impulse buyers.
+
+Table: purchases
+
+purchase_id
+user_id
+purchase_date     -- DATE
+
+
+Question:
+Find users who made more than one purchase, but never on consecutive days.
+
+7️⃣ A/B experiment ARPU
+
+Business context:
+You ran an experiment to test a new pricing UI.
+
+Table: experiment_events
+
+user_id
+variant            -- 'control', 'treatment'
+event_type         -- 'exposure', 'purchase'
+revenue            -- NULL if no purchase
+event_time
+
+
+Question:
+Compute ARPU per variant, excluding users who were never exposed.
+
+8️⃣ Viewed but not purchased
+
+Business context:
+PMs want to identify friction in the purchase flow.
+
+Table: events
+
+user_id
+product_id
+event              -- 'view', 'purchase'
+event_time
+
+
+Question:
+Find users who viewed a product but never purchased that product afterward.
+
+9️⃣ De-duplication
+
+Business context:
+User data comes from multiple pipelines and may contain duplicates.
+
+Table: users_raw
+
+user_id
+email
+updated_at         -- timestamp
+source
+
+
+Question:
+Keep only the most recent record per user.
+
+🔟 Median session duration
+
+Business context:
+You want to compare engagement across platforms.
+
+Table: sessions
+
+session_id
+user_id
+platform            -- 'web', 'android', 'ios'
+session_duration    -- seconds
+
+
+Question:
+Find the median session duration for each platform.
+
+1️⃣1️⃣ First vs later purchase behavior
+
+Business context:
+You want to understand spending behavior over time.
+
+Table: purchases
+
+purchase_id
+user_id
+amount
+purchase_time
+
+
+Question:
+Find users whose first purchase amount is greater than the average of their later purchases.
+
+1️⃣2️⃣ Activity streaks
+
+Business context:
+Daily engagement streaks indicate habit formation.
+
+Table: daily_activity
+
+user_id
+activity_date       -- DATE
+
+
+Question:
+For each user, find their longest consecutive daily activity streak.
+
+1️⃣3️⃣ High-conversion products
+
+Business context:
+You want to promote products that convert well.
+
+Table: events
+
+user_id
+product_id
+event              -- 'view', 'purchase'
+event_time
+
+
+Question:
+Find products whose conversion rate is above the platform-wide average.
+
+1️⃣4️⃣ Churn & reactivation
+
+Business context:
+Subscription recovery is a key growth lever.
+
+Table: subscriptions
+
+user_id
+status              -- 'active', 'churned', 'reactivated'
+status_date         -- DATE
+
+
+Question:
+Find users who churned and then reactivated within 30 days of churn.
+
+1️⃣5️⃣ Same action 3 times in a row
+
+Business context:
+Trust & Safety suspects automated behavior.
+
+Table: events
+
+user_id
+event
+event_time
+
+
+Question:
+Find users who performed the same action three times consecutively.
+
+1️⃣6️⃣ Monthly loyal users
+
+Business context:
+You’re identifying high-value loyal users.
+
+Table: purchases
+
+user_id
+purchase_date
+
+
+Question:
+Find users who made at least one purchase in every month of 2024.
+
+1️⃣7️⃣ Week-over-week growth
+
+Business context:
+Weekly growth metrics are shared with leadership.
+
+Table: daily_activity
+
+activity_date
+user_id
+
+
+Question:
+Calculate week-over-week DAU growth rate.
+
+1️⃣8️⃣ Search behavior
+
+Business context:
+You’re analyzing trending searches.
+
+Table: search_logs
+
+user_id
+query
+search_time         -- timestamp
+
+
+Question:
+For each day, find the most searched query.
+
+1️⃣9️⃣ Funnel drop-off
+
+Business context:
+You want to understand where users drop off.
+
+Table: funnel_events
+
+user_id
+step                -- 'view', 'add_to_cart', 'purchase'
+event_time
+
+
+Question:
+For each funnel step, count how many users reached it.
+
+2️⃣0️⃣ Lifetime revenue
+
+Business context:
+Finance wants to track long-term user value.
+
+Table: revenue_events
+
+user_id
+revenue
+event_time
+
+
+Question:
+For each user, calculate cumulative lifetime revenue over time.
